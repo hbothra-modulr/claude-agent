@@ -773,6 +773,105 @@ AI agents must never:
 
 ---
 
+# Implementation Guidance
+
+## Implementation Notes
+
+### Listener Implementation
+
+Consumers must implement RabbitMQ listeners using the shared library:
+
+```
+com.modulr.modulo.util:modulo-rabbitmq-listener
+```
+
+This library provides the standardized listener framework used across services and ensures consistent handling of:
+
+- message consumption
+- acknowledgement
+- error handling
+- retry behaviour
+- dead letter routing
+
+All consumer services should rely on this library rather than implementing custom RabbitMQ listener logic.
+
+When creating a new consumer:
+
+1. Add the dependency to the service.
+2. Implement the listener using the abstractions provided by the library.
+3. Configure queue bindings according to the naming conventions defined in this document.
+
+Using this shared implementation ensures consistent behaviour across services and simplifies operational support.
+
+### Example Listener Implementation
+
+Below is an example of how to implement a consumer using the `@ModuloRabbitListener` annotation provided by the shared library.
+
+```
+@ModuloRabbitListener(
+    exchange = "verification.dx",
+    bindingKey = "alloy-provider_individual-journey-application-request",
+    queue = "alloy-provider_individual-journey-application-request",
+    concurrency = "3",
+    failureStrategy = @ModuloRabbitListener.FailureStrategy(
+        retryStrategy = EXPONENTIAL,
+        initialRetryDelayMs = 5000,
+        retryAttempts = 3,
+        finalFailureHandling = ModuloRabbitListener.FinalFailureHandling.NONE
+    )
+)
+public void handleMessage(@Payload IndividualJourneyApplicationRequest request) {
+    try {
+        JourneyApplicationRequest request = mapper.mapToAlloyRequest(event);
+        createJourneyApplicationService.createJourneyApplication(request);
+    } catch (Exception ex) {
+        logger.error(
+            format("Error occurred while processing create application journey message. Request body: %s", request),
+            ex
+        );
+    }
+}
+```
+
+#### Explanation
+
+- **exchange** – The producer service direct exchange.
+- **bindingKey** – The routing key used to bind the queue to the exchange.
+- **queue** – The queue name that follows the naming convention.
+- **concurrency** – Number of concurrent consumers processing messages.
+- **failureStrategy** – Defines retry and failure handling behaviour.
+
+Failure strategy parameters:
+
+| Field | Description |
+|---|---|
+| retryStrategy | Retry algorithm used when processing fails |
+| initialRetryDelayMs | Initial delay before retry |
+| retryAttempts | Maximum retry attempts |
+| finalFailureHandling | Action when retries are exhausted |
+
+This annotation simplifies listener implementation and ensures consistent retry, failure, and acknowledgement handling across services.
+
+
+---
+
+# Implementation Guidance
+
+When publishing messages:
+
+- Exchange names must be **declared directly in code**.
+- Routing keys must be **declared directly in code**.
+
+Do not store them in configuration files or properties classes.
+
+This improves:
+
+- code review validation
+- test coverage
+- operational maintainability
+
+---
+
 # 13. AI Compliance Expectation
 
 Any AI‑generated implementation must be validated against this document before merge or deployment.
