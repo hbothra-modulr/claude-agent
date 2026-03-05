@@ -1,0 +1,73 @@
+name: Skill Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - '.claude/skills/**'
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+          claude_args: |
+            --model claude-haiku-4-5-20251001
+            --allowedTools "Read,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*)"
+
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review ONLY the skill files changed in this PR.
+
+            STEP 1: Run `gh pr diff ${{ github.event.pull_request.number }}` to see exactly what changed.
+            STEP 2: Read docs/SKILL_GUIDELINES.md to understand validation criteria.
+            STEP 3: Read .claude/skills/README.md to check for overlap with existing skills.
+            STEP 4: Validate ONLY the changed files against these criteria:
+
+            ## Structure
+            - SKILL.md has frontmatter with `name` and `description`
+            - README.md exists with human documentation
+            - Follows folder convention: `.claude/skills/<skill-name>/`
+
+            ## No Overlap
+            - Does not significantly overlap with existing skills
+            - If partial overlap, distinction is clear (different level or type)
+
+            ## Quality
+            - Not anemic - has substantive content
+            - Actionable checklists (not vague advice)
+            - Java-specific examples
+            - Checklist has <15 items
+
+            ## Output
+            Post a concise PR comment using `gh pr comment` with this format:
+
+            ```
+            **Verdict**: APPROVE | REQUEST_CHANGES | NEEDS_DISCUSSION
+
+            **Files reviewed**: [list changed files]
+
+            **Findings**:
+            - Structure: [pass/fail with brief note]
+            - Overlap: [pass/fail - mention related skills if relevant]
+            - Quality: [pass/fail with brief note]
+
+            **Action required**: [if any, otherwise "None - ready to merge"]
+            ```
+
+            Keep it brief and professional. No emojis. Focus on actionable feedback.
+            DO NOT explore or review files that were not changed in this PR.
